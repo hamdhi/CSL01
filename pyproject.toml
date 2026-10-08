@@ -1,0 +1,21 @@
+[project]
+name = "csl01"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+   "uvicorn>=0.22.0,<0.23.0",
+    "fastapi>=0.141.1",
+    "pydantic>=2.0.0",
+    "ruff",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.10.4,<1.11.0",
+    "psycopg2>=2.9.6,<2.10.0",
+    "pydantic[email]",
+    "google-genai",
+    "dotenv",
+    "pydantic-settings",
+    "PyJWT",
+    "passlib",
+    "bcrypt<4.0.0",
+    "python-multipart"
+]

@@ -1,0 +1,30 @@
+from fastapi import FastAPI
+
+from src.routes.admin_route import router as admin_router
+from src.routes.ministry_route import router as ministry_router
+from src.routes.role_route import router as role_router
+from src.routes.student_route import router as student_router
+from src.routes.teacher_route import router as teacher_router
+from src.routes.zonal_officer_route import router as zonal_officer_router
+
+app = FastAPI(
+    title="API",
+    description="Admin API for the Student Management System",
+    version="1.0.0",
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+app.include_router(admin_router)
+app.include_router(student_router)
+app.include_router(teacher_router)
+app.include_router(zonal_officer_router)
+app.include_router(ministry_router)
+app.include_router(role_router)
+
+
+
+@app.get("/",tags=["Health"])
+async def root():
+    return {"message": "Healthy API"}
