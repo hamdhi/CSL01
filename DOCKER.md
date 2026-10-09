@@ -5,6 +5,10 @@ remains a separate container.
 
 ## Start PostgreSQL
 
+The sample PostgreSQL compose configuration uses development credentials
+(`root`/`root`); change them and the matching `DATABASE_URL` before using this
+setup beyond a local demonstration.
+
 From the project root:
 
 ```powershell
@@ -34,6 +38,3 @@ migration error instead of starting against an outdated schema.
 The API and interactive docs are available at <http://localhost:8000> and
 <http://localhost:8000/docs>. The container runs Uvicorn with `--reload`.
 
-The sample PostgreSQL compose configuration uses development credentials
-(`root`/`root`); change them and the matching `DATABASE_URL` before using this
-setup beyond a local demonstration.
