@@ -3,11 +3,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
 
+from src.core.security import require_roles
 from src.schemas.role_schema import RoleResponseSchema
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.services.role_service import RoleService
 
-router = APIRouter(prefix="/roles", tags=["Roles"])
+router = APIRouter(
+    prefix="/roles",
+    tags=["Roles"],
+    dependencies=[Depends(require_roles("ADMIN"))],
+)
 
 
 @router.get(

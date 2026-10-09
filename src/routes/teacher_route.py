@@ -3,6 +3,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from src.core.security import (
+    AuthenticatedPrincipal,
+    get_current_principal,
+    require_roles,
+)
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.schemas.student_schema import (
     MonthlyRecordResponseSchema,
@@ -14,7 +19,11 @@ from src.schemas.teacher_schema import (
 )
 from src.services.teacher_service import TeacherService
 
-router = APIRouter(prefix="/teachers", tags=["Teachers"])
+router = APIRouter(
+    prefix="/teachers",
+    tags=["Teachers"],
+    dependencies=[Depends(require_roles("TEACHER"))],
+)
 
 
 @router.patch(
@@ -26,9 +35,17 @@ async def decide_student_registration(
     student_id: uuid.UUID,
     request: StudentRegistrationDecisionSchema,
     _service: Annotated[TeacherService, Depends()],
+    principal: Annotated[
+        AuthenticatedPrincipal, Depends(get_current_principal)
+    ],
 ):
+    if principal.zone_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The teacher is not assigned to a zone.",
+        )
     result = _service.decide_student_registration(
-        str(student_id), request.approved
+        str(student_id), request.approved, principal.zone_id
     )
     if result is None:
         raise HTTPException(
@@ -52,9 +69,17 @@ async def decide_monthly_record(
     record_id: uuid.UUID,
     request: MonthlyRecordDecisionSchema,
     _service: Annotated[TeacherService, Depends()],
+    principal: Annotated[
+        AuthenticatedPrincipal, Depends(get_current_principal)
+    ],
 ):
+    if principal.zone_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The teacher is not assigned to a zone.",
+        )
     result = _service.decide_monthly_record(
-        str(record_id), request.approved
+        str(record_id), request.approved, principal.zone_id
     )
     if result is None:
         raise HTTPException(
@@ -77,12 +102,30 @@ async def decide_monthly_record(
 async def reset_student_login(
     student_id: uuid.UUID,
     _service: Annotated[TeacherService, Depends()],
+    principal: Annotated[
+        AuthenticatedPrincipal, Depends(get_current_principal)
+    ],
 ):
-    _service.reset_student_login(str(student_id))
+    if principal.zone_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The teacher is not assigned to a zone.",
+        )
+    if principal.zone_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The teacher is not assigned to a zone.",
+        )
+    result = _service.reset_student_login(str(student_id), principal.zone_id)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found.",
+        )
 
     return StandardResponseSchema(
         data=None,
-        message="Student login reset successfully",
+        message="Student login sessions revoked successfully",
         status_code=status.HTTP_200_OK,
     )
 
@@ -95,8 +138,16 @@ async def reset_student_login(
 async def reset_monthly_record(
     student_id: uuid.UUID,
     _service: Annotated[TeacherService, Depends()],
+    principal: Annotated[
+        AuthenticatedPrincipal, Depends(get_current_principal)
+    ],
 ):
-    result = _service.reset_monthly_record(str(student_id))
+    if principal.zone_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The teacher is not assigned to a zone.",
+        )
+    result = _service.reset_monthly_record(str(student_id), principal.zone_id)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

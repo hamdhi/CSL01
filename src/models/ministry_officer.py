@@ -26,6 +26,9 @@ class MinistryOfficer(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    approval_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending"
+    )
 
     # Foreign keys (nullable)
     admin_id: Mapped[uuid.UUID | None] = mapped_column(

@@ -1,7 +1,9 @@
+import uuid
 from typing import Annotated, Any
 
 from fastapi import Depends
 
+from src.core.security import AuthenticatedPrincipal
 from src.repositories.admin_repo import AdminRepository
 
 
@@ -20,5 +22,15 @@ class AdminService:
     def remove_ministry_officer(self, officer_id: str):
         return self.admin_repository.delete_ministry_officer(officer_id)
 
-    def view_any_report(self):
-        return self.admin_repository.view_any_report()
+    def decide_ministry_officer(self, officer_id: str, approved: bool):
+        return self.admin_repository.decide_ministry_officer(
+            officer_id, approved
+        )
+
+    def view_any_report(self, principal: AuthenticatedPrincipal):
+        return self.admin_repository.view_any_report(principal)
+
+    def get_report(
+        self, report_id: uuid.UUID, principal: AuthenticatedPrincipal
+    ):
+        return self.admin_repository.get_report(report_id, principal)

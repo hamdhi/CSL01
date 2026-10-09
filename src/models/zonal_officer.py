@@ -24,6 +24,9 @@ class ZonalOfficer(Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    approval_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending"
+    )
 
     # Foreign keys (nullable)
     mini_id: Mapped[uuid.UUID | None] = mapped_column(

@@ -1,3 +1,5 @@
+import uuid
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import Depends
@@ -7,13 +9,24 @@ from sqlalchemy.orm import Session
 from src.core.database import get_session
 from src.models.monthly_record import MonthlyRecord
 from src.models.student import Student
+from src.models.subject import Subject
 from src.models.teacher import Teacher
+from src.models.user_account import UserAccount
 from src.repositories._helpers import as_uuid, get_role_id
 
 
 class TeacherRepository:
     def __init__(self, db: Annotated[Session, Depends(get_session)]) -> None:
         self.db = db
+
+    def list_subjects(self):
+        return list(
+            self.db.scalars(
+                select(Subject)
+                .where(Subject.active.is_(True))
+                .order_by(Subject.name)
+            ).all()
+        )
 
     def get_teacher(self, teacher_id: str):
         return self.db.scalar(
@@ -56,10 +69,15 @@ class TeacherRepository:
             self.db.rollback()
             raise
 
-    def decide_monthly_record(self, record_id: str, approved: bool):
+    def decide_monthly_record(
+        self, record_id: str, approved: bool, zone_id: uuid.UUID
+    ):
         record = self.db.scalar(
-            select(MonthlyRecord).where(
-                MonthlyRecord.id == as_uuid(record_id)
+            select(MonthlyRecord)
+            .join(Student, Student.stid == MonthlyRecord.fk_stid)
+            .where(
+                MonthlyRecord.id == as_uuid(record_id),
+                Student.zone_id == zone_id,
             )
         )
         if record is None:
@@ -73,9 +91,14 @@ class TeacherRepository:
             self.db.rollback()
             raise
 
-    def decide_student_registration(self, student_id: str, approved: bool):
+    def decide_student_registration(
+        self, student_id: str, approved: bool, zone_id: uuid.UUID
+    ):
         student = self.db.scalar(
-            select(Student).where(Student.stid == as_uuid(student_id))
+            select(Student).where(
+                Student.stid == as_uuid(student_id),
+                Student.zone_id == zone_id,
+            )
         )
         if student is None:
             return None
@@ -90,14 +113,42 @@ class TeacherRepository:
             self.db.rollback()
             raise
 
-    def reset_student_login(self, student_id: str):
-        pass
+    def reset_student_login(self, student_id: str, zone_id: uuid.UUID):
+        student = self.db.scalar(
+            select(Student).where(
+                Student.stid == as_uuid(student_id),
+                Student.zone_id == zone_id,
+            )
+        )
+        if student is None:
+            return False
+        account = self.db.scalar(
+            select(UserAccount).where(
+                UserAccount.actor_type == "student",
+                UserAccount.actor_id == student.stid,
+            )
+        )
+        if account is None:
+            return False
+        try:
+            now = datetime.now(UTC)
+            for session in account.sessions:
+                if session.revoked_at is None:
+                    session.revoked_at = now
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            raise
 
-    def reset_monthly_record(self, student_id: str):
+    def reset_monthly_record(self, student_id: str, zone_id: uuid.UUID):
         records = list(
             self.db.scalars(
-                select(MonthlyRecord).where(
-                    MonthlyRecord.fk_stid == as_uuid(student_id)
+                select(MonthlyRecord)
+                .join(Student, Student.stid == MonthlyRecord.fk_stid)
+                .where(
+                    MonthlyRecord.fk_stid == as_uuid(student_id),
+                    Student.zone_id == zone_id,
                 )
             ).all()
         )

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
 if TYPE_CHECKING:
+    from .educational_zone import EducationalZone
     from .electricity_record import ElectricityRecord
     from .monthly_record import MonthlyRecord
     from .province import Province
@@ -27,6 +28,9 @@ class Student(Base):
     )
     Name: Mapped[str] = mapped_column(String(100), nullable=False)
     Grade: Mapped[str] = mapped_column(String(50), nullable=False)
+    stream: Mapped[str] = mapped_column(
+        String(50), nullable=False, default=""
+    )
     School: Mapped[str] = mapped_column(String(100), nullable=False)
     Gmail: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     registration_status: Mapped[str] = mapped_column(
@@ -35,6 +39,11 @@ class Student(Base):
 
     # Foreign keys (nullable as they may not be assigned yet)
     prov_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        default=None,
+        index=True,
+    )
+    zone_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         default=None,
         index=True,
@@ -55,6 +64,10 @@ class Student(Base):
         "Province",
         back_populates="students",
         primaryjoin="foreign(Student.prov_id) == Province.prov_id",
+    )
+    zone: Mapped["EducationalZone | None"] = relationship(
+        "EducationalZone",
+        primaryjoin="foreign(Student.zone_id) == EducationalZone.zone_id",
     )
     electricity_record: Mapped["ElectricityRecord | None"] = relationship(
         "ElectricityRecord",

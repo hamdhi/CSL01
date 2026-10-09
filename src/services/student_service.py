@@ -14,8 +14,8 @@ class StudentService:
     def register_student(self, request_data: dict[str, Any]):
         return self.student_repository.create_student(request_data)
 
-    def login_with_google(self, id_token: str):
-        return self.student_repository.login_with_google(id_token)
+    def list_subjects(self, grade: str, stream: str = ""):
+        return self.student_repository.list_subjects(grade, stream)
 
     def submit_monthly_record(self, request_data: dict[str, Any]):
         return self.student_repository.create_monthly_record(request_data)

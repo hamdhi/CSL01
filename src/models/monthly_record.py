@@ -1,19 +1,20 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import UUID, Boolean, DateTime
+from sqlalchemy import UUID, Boolean, Date, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
 
 if TYPE_CHECKING:
+    from .monthly_record_mark import MonthlyRecordMark
     from .student import Student
     from .teacher import Teacher
 
 
 class MonthlyRecord(Base):
-    """Represents a monthly record uploaded by a student."""
+    """Stores a student's submission and its teacher-review status."""
 
     __tablename__ = "monthly_records"
 
@@ -32,6 +33,7 @@ class MonthlyRecord(Base):
         nullable=True,
         index=True,
     )
+    reporting_month: Mapped[date] = mapped_column(Date, nullable=False)
     upload_date: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )
@@ -49,6 +51,11 @@ class MonthlyRecord(Base):
         "Teacher",
         back_populates="monthly_records",
         primaryjoin="foreign(MonthlyRecord.fk_tid) == Teacher.tid",
+    )
+    marks: Mapped[list["MonthlyRecordMark"]] = relationship(
+        "MonthlyRecordMark",
+        back_populates="monthly_record",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

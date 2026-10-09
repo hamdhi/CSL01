@@ -8,7 +8,7 @@ Teacher entity from the ER diagram:
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from .monthly_record import MonthlyRecord
     from .role import Role
     from .student import Student
+    from .subject import Subject
 
 
 class Teacher(Base):
@@ -34,6 +35,15 @@ class Teacher(Base):
     )
     Name: Mapped[str] = mapped_column(String(100), nullable=False)
     Subject: Mapped[str] = mapped_column(String(100), nullable=False)
+    approval_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending"
+    )
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("subjects.subject_id"),
+        nullable=True,
+        index=True,
+    )
     School: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Foreign keys (nullable as they may not be assigned yet)
@@ -55,6 +65,7 @@ class Teacher(Base):
         back_populates="teachers",
         primaryjoin="foreign(Teacher.role_id) == Role.role_id",
     )
+    subject: Mapped["Subject | None"] = relationship("Subject")
     monthly_records: Mapped[list["MonthlyRecord"]] = relationship(
         "MonthlyRecord",
         back_populates="teacher",

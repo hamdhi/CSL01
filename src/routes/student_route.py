@@ -1,15 +1,17 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from src.core.security import AuthenticatedPrincipal, require_roles
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.schemas.student_schema import (
-    GoogleLoginRequestSchema,
+    MonthlyRecordRequestSchema,
     MonthlyRecordResponseSchema,
     StudentRegisterRequestSchema,
     StudentResponseSchema,
 )
+from src.schemas.subject_schema import SubjectResponseSchema
 from src.services.student_service import StudentService
 
 router = APIRouter(prefix="/students", tags=["Students"])
@@ -34,33 +36,26 @@ async def register_student(
 
 
 @router.post(
-    "/login/google",
-    response_model=StandardResponseSchema[dict[str, str]],
-    status_code=status.HTTP_200_OK,
-)
-async def login_with_google(
-    request: GoogleLoginRequestSchema,
-    _service: Annotated[StudentService, Depends()],
-):
-    result = _service.login_with_google(request.id_token)
-
-    return StandardResponseSchema(
-        data=result,
-        message="Google login successful",
-        status_code=status.HTTP_200_OK,
-    )
-
-
-@router.post(
     "/{student_id}/monthly-records",
     response_model=StandardResponseSchema[MonthlyRecordResponseSchema],
     status_code=status.HTTP_201_CREATED,
 )
 async def submit_monthly_record(
     student_id: uuid.UUID,
+    request: MonthlyRecordRequestSchema,
     _service: Annotated[StudentService, Depends()],
+    principal: Annotated[
+        AuthenticatedPrincipal, Depends(require_roles("STUDENT"))
+    ],
 ):
-    result = _service.submit_monthly_record({"fk_stid": student_id})
+    if principal.actor_id != student_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only submit your own monthly record.",
+        )
+    request_data = request.model_dump()
+    request_data["fk_stid"] = student_id
+    result = _service.submit_monthly_record(request_data)
 
     return StandardResponseSchema(
         data=MonthlyRecordResponseSchema.model_validate(result),
@@ -68,3 +63,20 @@ async def submit_monthly_record(
         status_code=status.HTTP_201_CREATED,
     )
 
+
+@router.get(
+    "/subjects",
+    response_model=StandardResponseSchema[list[SubjectResponseSchema]],
+    status_code=status.HTTP_200_OK,
+)
+async def list_subjects(
+    grade: str,
+    _service: Annotated[StudentService, Depends()],
+    stream: str = "",
+):
+    result = _service.list_subjects(grade, stream)
+    return StandardResponseSchema(
+        data=result,
+        message="Subjects retrieved successfully",
+        status_code=status.HTTP_200_OK,
+    )
