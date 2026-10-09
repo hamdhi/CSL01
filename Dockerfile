@@ -29,7 +29,10 @@ COPY --from=builder /opt/venv /opt/venv
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY src ./src
+COPY __init__.py ./app.py
+
+# copying __init__ as app.py to make it work with uvicorn 
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn src.routes:app --host 0.0.0.0 --port 8000 --reload"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app:app --host 0.0.0.0 --port 8000 --reload"]
