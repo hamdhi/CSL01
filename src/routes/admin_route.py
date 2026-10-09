@@ -1,18 +1,20 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.security import (
     AuthenticatedPrincipal,
     get_current_principal,
     require_roles,
 )
+from src.schemas.admin_schema import AdminResponseSchema
 from src.schemas.ministry_schema import (
     MinistryCreateRequestSchema,
     MinistryRequestSchema,
     MinistryResponseSchema,
 )
+from src.schemas.pagination_schema import PaginatedDataSchema
 from src.schemas.report_schema import ReportResponseSchema
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.schemas.student_schema import StudentRegistrationDecisionSchema
@@ -23,6 +25,51 @@ router = APIRouter(
     tags=["Admin"],
     dependencies=[Depends(require_roles("ADMIN"))],
 )
+
+
+@router.get(
+    "/admins",
+    response_model=StandardResponseSchema[
+        PaginatedDataSchema[AdminResponseSchema]
+    ],
+)
+async def list_admins(
+    _service: Annotated[AdminService, Depends()],
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    result = _service.list_admins(offset, limit)
+    result["items"] = [
+        AdminResponseSchema.model_validate(item) for item in result["items"]
+    ]
+    return StandardResponseSchema(
+        data=result,
+        message="Admins retrieved successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get(
+    "/ministry-officers",
+    response_model=StandardResponseSchema[
+        PaginatedDataSchema[MinistryResponseSchema]
+    ],
+)
+async def list_ministry_officers(
+    _service: Annotated[AdminService, Depends()],
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    result = _service.list_ministry_officers(offset, limit)
+    result["items"] = [
+        MinistryResponseSchema.model_validate(item)
+        for item in result["items"]
+    ]
+    return StandardResponseSchema(
+        data=result,
+        message="Ministry officers retrieved successfully",
+        status_code=status.HTTP_200_OK,
+    )
 
 
 @router.post(

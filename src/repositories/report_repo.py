@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from src.core.database import get_session
 from src.core.security import AuthenticatedPrincipal
+from src.models.educational_zone import EducationalZone
 from src.models.monthly_record import MonthlyRecord
 from src.models.monthly_record_mark import MonthlyRecordMark
 from src.models.province import Province
@@ -48,9 +49,15 @@ class ReportRepository:
             )
 
         statement = (
-            select(MonthlyRecord, Student, Province)
+            select(MonthlyRecord, Student, EducationalZone, Province)
             .join(Student, Student.stid == MonthlyRecord.fk_stid)
-            .outerjoin(Province, Province.prov_id == Student.prov_id)
+            .outerjoin(
+                EducationalZone,
+                EducationalZone.zone_id == Student.zone_id,
+            )
+            .outerjoin(
+                Province, Province.prov_id == EducationalZone.prov_id
+            )
             .where(
                 MonthlyRecord.reporting_month >= start_date,
                 MonthlyRecord.reporting_month <= end_date,
@@ -67,7 +74,7 @@ class ReportRepository:
         )
         if province_id is not None:
             statement = statement.where(
-                Student.prov_id == as_uuid(province_id)
+                EducationalZone.prov_id == as_uuid(province_id)
             )
         if zone_id is not None:
             statement = statement.where(Student.zone_id == as_uuid(zone_id))
@@ -85,7 +92,7 @@ class ReportRepository:
                 "grade": student.Grade,
                 "stream": student.stream,
                 "school": student.School,
-                "prov_id": student.prov_id,
+                "prov_id": zone.prov_id if zone else None,
                 "zone_id": student.zone_id,
                 "province_name": province.Province_name if province else None,
                 "marks": [
@@ -101,7 +108,7 @@ class ReportRepository:
                     for mark in record.marks
                 ],
             }
-            for record, student, province in rows
+            for record, student, zone, province in rows
         ]
 
         if report_type in {"province", "three_month_province"}:

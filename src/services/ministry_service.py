@@ -24,6 +24,27 @@ class MinistryService:
     def remove_zonal_officer(self, officer_id: str):
         return self.ministry_repository.delete_zonal_officer(officer_id)
 
+    def list_zonal_officers(
+        self, ministry_id: uuid.UUID, offset: int, limit: int
+    ):
+        return self.ministry_repository.list_zonal_officers(
+            ministry_id, offset, limit
+        )
+
+    def list_ministry_officers(self, offset: int, limit: int):
+        return self.ministry_repository.list_ministry_officers(offset, limit)
+
+    def create_zone(
+        self, name: str, prov_id: uuid.UUID
+    ):
+        return self.ministry_repository.create_zone(name, prov_id)
+
+    def list_zones(self, offset: int, limit: int):
+        return self.ministry_repository.list_zones(offset, limit)
+
+    def list_provinces(self, offset: int, limit: int):
+        return self.ministry_repository.list_provinces(offset, limit)
+
     def decide_zonal_officer(self, officer_id: str, approved: bool):
         return self.ministry_repository.decide_zonal_officer(
             officer_id, approved

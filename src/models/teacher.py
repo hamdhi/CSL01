@@ -33,6 +33,9 @@ class Teacher(Base):
         nullable=False,
         index=True,
     )
+    teacher_code: Mapped[str] = mapped_column(
+        String(20), nullable=False, unique=True, index=True
+    )
     Name: Mapped[str] = mapped_column(String(100), nullable=False)
     Subject: Mapped[str] = mapped_column(String(100), nullable=False)
     approval_status: Mapped[str] = mapped_column(
@@ -48,7 +51,10 @@ class Teacher(Base):
 
     # Foreign keys (nullable as they may not be assigned yet)
     zonal_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), default=None, index=True
+        UUID(as_uuid=True),
+        ForeignKey("educational_zones.zone_id"),
+        default=None,
+        index=True,
     )
     role_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), default=None, index=True
@@ -58,7 +64,6 @@ class Teacher(Base):
     zone: Mapped["EducationalZone | None"] = relationship(
         "EducationalZone",
         back_populates="teachers",
-        primaryjoin="foreign(Teacher.zonal_id) == EducationalZone.zone_id",
     )
     role: Mapped["Role | None"] = relationship(
         "Role",

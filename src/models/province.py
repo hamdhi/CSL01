@@ -16,7 +16,6 @@ from .base import Base
 
 if TYPE_CHECKING:
     from .educational_zone import EducationalZone
-    from .student import Student
 
 
 class Province(Base):
@@ -31,16 +30,9 @@ class Province(Base):
     )
     Province_name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
 
-    # Relationship: A province can have many students and zones
-    students: Mapped[list["Student"]] = relationship(
-        "Student",
-        back_populates="province",
-        primaryjoin="Province.prov_id == foreign(Student.prov_id)",
-    )
     zones: Mapped[list["EducationalZone"]] = relationship(
         "EducationalZone",
         back_populates="province",
-        primaryjoin="Province.prov_id == foreign(EducationalZone.prov_id)",
     )
 
     def __repr__(self) -> str:

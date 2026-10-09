@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import UUID, String
+from sqlalchemy import UUID, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from .educational_zone import EducationalZone
     from .electricity_record import ElectricityRecord
     from .monthly_record import MonthlyRecord
-    from .province import Province
     from .role import Role
     from .teacher import Teacher
 
@@ -38,13 +37,9 @@ class Student(Base):
     )
 
     # Foreign keys (nullable as they may not be assigned yet)
-    prov_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        default=None,
-        index=True,
-    )
     zone_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("educational_zones.zone_id"),
         default=None,
         index=True,
     )
@@ -60,14 +55,9 @@ class Student(Base):
     )
 
     # Relationships
-    province: Mapped["Province | None"] = relationship(
-        "Province",
-        back_populates="students",
-        primaryjoin="foreign(Student.prov_id) == Province.prov_id",
-    )
     zone: Mapped["EducationalZone | None"] = relationship(
         "EducationalZone",
-        primaryjoin="foreign(Student.zone_id) == EducationalZone.zone_id",
+        back_populates="students",
     )
     electricity_record: Mapped["ElectricityRecord | None"] = relationship(
         "ElectricityRecord",

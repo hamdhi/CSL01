@@ -12,10 +12,30 @@ class TeacherCreateRequestSchema(BaseModel):
     zonal_id: uuid.UUID | None = None
 
 
+class TeacherLookupResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    teacher_code: str
+    Name: str
+    Subject: str
+    School: str
+
+
+class TeacherAssignmentResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    teacher_code: str
+    Name: str
+    Subject: str
+    School: str
+    assignment_status: str
+
+
 class TeacherResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     tid: uuid.UUID
+    teacher_code: str
     Name: str
     Subject: str
     subject_id: uuid.UUID | None = None
@@ -26,4 +46,8 @@ class TeacherResponseSchema(BaseModel):
 
 
 class MonthlyRecordDecisionSchema(BaseModel):
+    approved: bool
+
+
+class TeacherAssignmentDecisionSchema(BaseModel):
     approved: bool

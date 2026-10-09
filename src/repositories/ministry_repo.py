@@ -10,9 +10,11 @@ from sqlalchemy.orm import Session
 from src.core.database import get_session
 from src.models.educational_zone import EducationalZone
 from src.models.ministry_officer import MinistryOfficer
+from src.models.province import Province
 from src.models.subject import Subject
 from src.models.zonal_officer import ZonalOfficer
 from src.repositories._helpers import as_uuid, get_role_id
+from src.repositories._pagination import paginate
 from src.repositories.account_repo import add_user_account
 from src.repositories.report_repo import ReportRepository
 
@@ -82,6 +84,60 @@ class MinistryRepository:
             statement = statement.where(Subject.active.is_(True))
         return list(self.db.scalars(statement.order_by(Subject.grade, Subject.stream, Subject.name)).all())
 
+    def create_zone(
+        self, name: str, prov_id: uuid.UUID
+    ) -> EducationalZone:
+        normalized_name = " ".join(name.split())
+        if not normalized_name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Zone name cannot be blank.",
+            )
+        if self.db.get(Province, prov_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Province not found.",
+            )
+        zone = EducationalZone(
+            zone_id=uuid.uuid4(),
+            name=normalized_name,
+            prov_id=prov_id,
+        )
+        try:
+            self.db.add(zone)
+            self.db.commit()
+            self.db.refresh(zone)
+            return zone
+        except IntegrityError as error:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A zone with this name already exists.",
+            ) from error
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def list_zones(self, offset: int, limit: int):
+        return paginate(
+            self.db,
+            select(EducationalZone).order_by(
+                EducationalZone.prov_id,
+                EducationalZone.name,
+                EducationalZone.zone_id,
+            ),
+            offset,
+            limit,
+        )
+
+    def list_provinces(self, offset: int, limit: int):
+        return paginate(
+            self.db,
+            select(Province).order_by(Province.Province_name, Province.prov_id),
+            offset,
+            limit,
+        )
+
     def update_subject(self, subject_id: str, changes: dict[str, Any]):
         subject = self.db.get(Subject, as_uuid(subject_id))
         if subject is None:
@@ -123,7 +179,12 @@ class MinistryRepository:
                 detail="Ministry officer not found.",
             )
         zone_id = request_data.get("zone_id")
-        if zone_id is not None and self.db.get(EducationalZone, zone_id) is None:
+        if zone_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A zone must be selected for the zonal officer.",
+            )
+        if self.db.get(EducationalZone, zone_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Educational zone not found.",
@@ -155,9 +216,26 @@ class MinistryRepository:
             )
         )
 
-    def list_zonal_officers(self):
-        return list(
-            self.db.scalars(select(ZonalOfficer).order_by(ZonalOfficer.name)).all()
+    def list_zonal_officers(
+        self, ministry_id: uuid.UUID, offset: int, limit: int
+    ):
+        return paginate(
+            self.db,
+            select(ZonalOfficer)
+            .where(ZonalOfficer.mini_id == ministry_id)
+            .order_by(ZonalOfficer.name, ZonalOfficer.zonal_id),
+            offset,
+            limit,
+        )
+
+    def list_ministry_officers(self, offset: int, limit: int):
+        return paginate(
+            self.db,
+            select(MinistryOfficer).order_by(
+                MinistryOfficer.name, MinistryOfficer.mini_id
+            ),
+            offset,
+            limit,
         )
 
     def update_zonal_officer(self, officer_id: str, changes: dict[str, Any]):
@@ -173,6 +251,11 @@ class MinistryRepository:
                 detail="Ministry officer not found.",
             )
         zone_id = changes.get("zone_id")
+        if "zone_id" in changes and zone_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A zone must be selected for the zonal officer.",
+            )
         if zone_id is not None and self.db.get(EducationalZone, zone_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

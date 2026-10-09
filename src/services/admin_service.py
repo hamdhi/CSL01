@@ -16,6 +16,12 @@ class AdminService:
     async def addMinistry(self, request_data: dict[str, Any]):
         return await self.admin_repository.addMinistry(request_data)
 
+    def list_admins(self, offset: int, limit: int):
+        return self.admin_repository.list_admins(offset, limit)
+
+    def list_ministry_officers(self, offset: int, limit: int):
+        return self.admin_repository.list_ministry_officers(offset, limit)
+
     def update_ministry_officer(self, officer_id: str, changes: dict[str, Any]):
         return self.admin_repository.update_ministry_officer(officer_id, changes)
 

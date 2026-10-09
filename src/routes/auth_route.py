@@ -6,7 +6,7 @@ from typing import Annotated
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.core.config import settings
 from src.core.security import (
@@ -29,6 +29,7 @@ REFRESH_COOKIE = "refresh_token"
 OAUTH_STATE_COOKIE = "google_oauth_state"
 OAUTH_VERIFIER_COOKIE = "google_oauth_verifier"
 OAUTH_NONCE_COOKIE = "google_oauth_nonce"
+OAUTH_RETRY_COOKIE = "google_oauth_retry"
 OAUTH_COOKIE_PATH = "/auth/google/callback"
 
 
@@ -65,7 +66,7 @@ async def login(
         "sign-in (for local development, use `localhost`, not `127.0.0.1`)."
     ),
 )
-def start_google_login():
+def start_google_login(retry: bool = False):
     _validate_google_configuration()
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
@@ -99,6 +100,14 @@ def start_google_login():
     response.set_cookie(
         OAUTH_NONCE_COOKIE, nonce, **cookie_options
     )
+    if retry:
+        response.set_cookie(
+            OAUTH_RETRY_COOKIE,
+            "1",
+            **cookie_options,
+        )
+    else:
+        _clear_oauth_retry_cookie(response)
     return response
 
 
@@ -130,13 +139,49 @@ def google_callback(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Google sign-in state is invalid or expired. Please retry.",
         )
-    result = _service.login_with_google_code(code, code_verifier, nonce)
+    try:
+        result = _service.login_with_google_code(code, code_verifier, nonce)
+    except HTTPException as auth_error:
+        if (
+            auth_error.status_code == status.HTTP_401_UNAUTHORIZED
+            and auth_error.detail
+            == (
+                "Google returned an ID token that failed verification. "
+                "Please start sign-in again. If this repeats, check the "
+                "application server log for the verification reason."
+            )
+        ):
+            if request.cookies.get(OAUTH_RETRY_COOKIE) != "1":
+                response = RedirectResponse(
+                    f"{_origin(settings.GOOGLE_REDIRECT_URI)}"
+                    "/auth/google/start?retry=true",
+                    status_code=status.HTTP_303_SEE_OTHER,
+                )
+                _clear_oauth_cookies(response)
+                return response
+            response = JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={
+                    "detail": (
+                        "Google could not verify the sign-in after a retry. "
+                        "Please start sign-in again. If this keeps happening, "
+                        "check the application server log for the verification "
+                        "reason, then confirm the Google OAuth client ID and "
+                        "server clock."
+                    )
+                },
+            )
+            _clear_oauth_cookies(response)
+            _clear_oauth_retry_cookie(response)
+            return response
+        raise
     response = RedirectResponse(
         settings.FRONTEND_URL,
         status_code=status.HTTP_303_SEE_OTHER,
     )
     _set_auth_cookies(response, result)
     _clear_oauth_cookies(response)
+    _clear_oauth_retry_cookie(response)
     return response
 
 
@@ -304,6 +349,16 @@ def _clear_oauth_cookies(response: Response) -> None:
             httponly=True,
             samesite="lax",
         )
+
+
+def _clear_oauth_retry_cookie(response: Response) -> None:
+    response.delete_cookie(
+        OAUTH_RETRY_COOKIE,
+        path=OAUTH_COOKIE_PATH,
+        secure=settings.AUTH_COOKIE_SECURE,
+        httponly=True,
+        samesite="lax",
+    )
 
 
 def _session_response(result: dict[str, object]) -> AuthSessionResponseSchema:

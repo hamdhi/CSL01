@@ -1,13 +1,15 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.security import (
     AuthenticatedPrincipal,
     get_current_principal,
     require_roles,
 )
+from src.schemas.ministry_schema import MinistryResponseSchema
+from src.schemas.pagination_schema import PaginatedDataSchema
 from src.schemas.report_schema import ReportRequestSchema, ReportResponseSchema
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.schemas.student_schema import StudentRegistrationDecisionSchema
@@ -21,6 +23,11 @@ from src.schemas.zonal_officer_schema import (
     ZonalOfficerResponseSchema,
     ZonalOfficerUpdateRequestSchema,
 )
+from src.schemas.zone_schema import (
+    ProvinceResponseSchema,
+    ZoneCreateRequestSchema,
+    ZoneResponseSchema,
+)
 from src.services.ministry_service import MinistryService
 
 router = APIRouter(
@@ -28,6 +35,127 @@ router = APIRouter(
     tags=["Ministry"],
     dependencies=[Depends(require_roles("MINISTRY"))],
 )
+
+
+@router.get(
+    "/zonal-officers",
+    response_model=StandardResponseSchema[
+        PaginatedDataSchema[ZonalOfficerResponseSchema]
+    ],
+)
+async def list_zonal_officers(
+    _service: Annotated[MinistryService, Depends()],
+    principal: Annotated[
+        AuthenticatedPrincipal, Depends(get_current_principal)
+    ],
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    result = _service.list_zonal_officers(principal.actor_id, offset, limit)
+    result["items"] = [
+        ZonalOfficerResponseSchema.model_validate(item)
+        for item in result["items"]
+    ]
+    return StandardResponseSchema(
+        data=result,
+        message="Zonal officers retrieved successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get(
+    "/officers",
+    response_model=StandardResponseSchema[
+        PaginatedDataSchema[MinistryResponseSchema]
+    ],
+)
+async def list_ministry_officers(
+    _service: Annotated[MinistryService, Depends()],
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    result = _service.list_ministry_officers(offset, limit)
+    result["items"] = [
+        MinistryResponseSchema.model_validate(item)
+        for item in result["items"]
+    ]
+    return StandardResponseSchema(
+        data=result,
+        message="Ministry officers retrieved successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post(
+    "/zones",
+    response_model=StandardResponseSchema[ZoneResponseSchema],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_zone(
+    request: ZoneCreateRequestSchema,
+    _service: Annotated[MinistryService, Depends()],
+):
+    zone = _service.create_zone(request.name, request.prov_id)
+    return StandardResponseSchema(
+        data=ZoneResponseSchema(
+            zone_id=zone.zone_id,
+            name=zone.name,
+            prov_id=zone.prov_id,
+        ),
+        message="Zone created successfully",
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.get(
+    "/zones",
+    response_model=StandardResponseSchema[PaginatedDataSchema[ZoneResponseSchema]],
+)
+async def list_zones(
+    _service: Annotated[MinistryService, Depends()],
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    result = _service.list_zones(offset, limit)
+    result["items"] = [
+        ZoneResponseSchema(
+            zone_id=zone.zone_id,
+            name=zone.name,
+            prov_id=zone.prov_id,
+        )
+        for zone in result["items"]
+    ]
+    return StandardResponseSchema(
+        data=result,
+        message="Zones retrieved successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get(
+    "/provinces",
+    response_model=StandardResponseSchema[
+        PaginatedDataSchema[ProvinceResponseSchema]
+    ],
+)
+async def list_provinces(
+    _service: Annotated[MinistryService, Depends()],
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    result = _service.list_provinces(offset, limit)
+    result["items"] = [
+        ProvinceResponseSchema(
+            prov_id=province.prov_id,
+            name=province.Province_name,
+        )
+        for province in result["items"]
+    ]
+    return StandardResponseSchema(
+        data=result,
+        message="Provinces retrieved successfully",
+        status_code=status.HTTP_200_OK,
+    )
 
 
 @router.post(

@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import UUID, String
+from sqlalchemy import UUID, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -36,6 +36,7 @@ class ZonalOfficer(Base):
     )
     zone_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("educational_zones.zone_id"),
         default=None,
         index=True,
     )
@@ -54,7 +55,6 @@ class ZonalOfficer(Base):
     zone: Mapped["EducationalZone | None"] = relationship(
         "EducationalZone",
         back_populates="zonal_officers",
-        primaryjoin="foreign(ZonalOfficer.zone_id) == EducationalZone.zone_id",
     )
     role: Mapped["Role | None"] = relationship(
         "Role",

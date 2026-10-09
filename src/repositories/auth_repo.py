@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -10,7 +11,7 @@ from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
 
 from fastapi import HTTPException, status
-from google.auth.exceptions import GoogleAuthError
+from google.auth.exceptions import GoogleAuthError, TransportError
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from sqlalchemy import select
@@ -22,6 +23,8 @@ from src.core.security import create_token, decode_token, resolve_principal
 from src.models.auth_session import AuthSession
 from src.models.user_account import UserAccount
 from src.repositories.account_repo import normalize_email
+
+logger = logging.getLogger(__name__)
 
 
 class AuthRepository:
@@ -99,12 +102,36 @@ class AuthRepository:
             )
         try:
             claims = id_token.verify_oauth2_token(
-                google_id_token, GoogleRequest(), audience=client_id
+                google_id_token,
+                GoogleRequest(),
+                audience=client_id,
+                clock_skew_in_seconds=60,
             )
+        except TransportError as error:
+            logger.warning(
+                "Could not reach Google's token verification service: %s",
+                error,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "Could not reach Google's token verification service. "
+                    "Please try again."
+                ),
+            ) from error
         except (ValueError, GoogleAuthError) as error:
+            logger.warning(
+                "Google ID token verification rejected (%s): %s",
+                type(error).__name__,
+                error,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Google ID token is invalid or expired.",
+                detail=(
+                    "Google returned an ID token that failed verification. "
+                    "Please start sign-in again. If this repeats, check the "
+                    "application server log for the verification reason."
+                ),
             ) from error
         if not hmac.compare_digest(str(claims.get("nonce", "")), nonce):
             raise HTTPException(

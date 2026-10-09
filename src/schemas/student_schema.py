@@ -16,15 +16,13 @@ from pydantic import (
 from src.schemas.subject_schema import SubjectResponseSchema
 
 
-class StudentRegisterRequestSchema(BaseModel):
+class StudentRegistrationDetailsSchema(BaseModel):
     Name: str
     Grade: str
     stream: str = ""
     School: str
     Gmail: EmailStr
     password: str = Field(min_length=12, max_length=128)
-    zone_id: uuid.UUID
-    prov_id: uuid.UUID | None = None
     acc_number: str | None = None
 
     @field_validator("Grade")
@@ -49,6 +47,25 @@ class StudentRegisterRequestSchema(BaseModel):
         return self
 
 
+class TeacherAddStudentRequestSchema(StudentRegistrationDetailsSchema):
+    model_config = ConfigDict(extra="forbid")
+
+
+class StudentRegisterRequestSchema(StudentRegistrationDetailsSchema):
+    model_config = ConfigDict(extra="forbid")
+
+    teacher_code: str = Field(
+        min_length=4,
+        max_length=20,
+        pattern=r"^[Tt]\d{3,}$",
+    )
+
+    @field_validator("teacher_code")
+    @classmethod
+    def normalize_teacher_code(cls, teacher_code: str) -> str:
+        return teacher_code.strip().upper()
+
+
 class StudentResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,10 +76,20 @@ class StudentResponseSchema(BaseModel):
     School: str
     Gmail: EmailStr
     registration_status: str
-    prov_id: uuid.UUID | None = None
     zone_id: uuid.UUID | None = None
     acc_number: str | None = None
     role_id: uuid.UUID | None = None
+
+
+class StudentDirectoryResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    stid: uuid.UUID
+    Name: str
+    Grade: str
+    stream: str
+    School: str
+    registration_status: str
 
 
 class MonthlyRecordResponseSchema(BaseModel):

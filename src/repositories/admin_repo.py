@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 
 from src.core.database import get_session
 from src.core.security import AuthenticatedPrincipal
+from src.models.admin import Admin
 from src.models.ministry_officer import MinistryOfficer
 from src.models.user_account import UserAccount
 from src.repositories._helpers import as_uuid, get_role_id
+from src.repositories._pagination import paginate
 from src.repositories.account_repo import add_user_account
 from src.repositories.report_repo import ReportRepository
 
@@ -17,6 +19,14 @@ from src.repositories.report_repo import ReportRepository
 class AdminRepository:
     def __init__(self, db: Annotated[Session, Depends(get_session)]) -> None:
         self.db = db
+
+    def list_admins(self, offset: int, limit: int):
+        return paginate(
+            self.db,
+            select(Admin).order_by(Admin.admin_name, Admin.admin_id),
+            offset,
+            limit,
+        )
 
     async def addMinistry(self, request_data: dict[str, Any]):
         email = str(request_data.pop("email"))
@@ -49,11 +59,14 @@ class AdminRepository:
             )
         )
 
-    def list_ministry_officers(self):
-        return list(
-            self.db.scalars(
-                select(MinistryOfficer).order_by(MinistryOfficer.name)
-            ).all()
+    def list_ministry_officers(self, offset: int, limit: int):
+        return paginate(
+            self.db,
+            select(MinistryOfficer).order_by(
+                MinistryOfficer.name, MinistryOfficer.mini_id
+            ),
+            offset,
+            limit,
         )
 
     def update_ministry_officer(self, officer_id: str, changes: dict[str, Any]):

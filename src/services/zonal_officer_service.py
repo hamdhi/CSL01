@@ -19,6 +19,35 @@ class ZonalOfficerService:
     def add_teacher(self, request_data: dict[str, Any]):
         return self.zonal_officer_repository.create_teacher(request_data)
 
+    def list_teachers(self, zone_id: uuid.UUID, offset: int, limit: int):
+        return self.zonal_officer_repository.list_teachers(
+            zone_id, offset, limit
+        )
+
+    def list_subjects(
+        self, grade: str | None = None, stream: str | None = None
+    ):
+        return self.zonal_officer_repository.list_subjects(grade, stream)
+
+    def list_zonal_officers(
+        self, zonal_id: uuid.UUID, offset: int, limit: int
+    ):
+        return self.zonal_officer_repository.list_zonal_officers(
+            zonal_id, offset, limit
+        )
+
+    def list_students(self, zone_id: uuid.UUID, offset: int, limit: int):
+        return self.zonal_officer_repository.list_students(
+            zone_id, offset, limit
+        )
+
+    def list_monthly_records(
+        self, zone_id: uuid.UUID, offset: int, limit: int
+    ):
+        return self.zonal_officer_repository.list_monthly_records(
+            zone_id, offset, limit
+        )
+
     def get_monthly_report(
         self,
         start_date: date,
