@@ -58,16 +58,6 @@ class ZonalOfficerService:
             start_date, end_date, principal
         )
 
-    def get_three_month_report(
-        self,
-        start_date: date,
-        end_date: date,
-        principal: AuthenticatedPrincipal,
-    ):
-        return self.zonal_officer_repository.get_three_month_report(
-            start_date, end_date, principal
-        )
-
     def decide_teacher_registration(
         self, teacher_id: str, approved: bool, zone_id: uuid.UUID
     ):
@@ -86,3 +76,12 @@ class ZonalOfficerService:
         return ReportRepository(
             self.zonal_officer_repository.db
         ).get_saved_report(report_id, principal)
+
+    def generate_zone_pdf(
+        self,
+        principal: AuthenticatedPrincipal,
+        period: tuple[date, date],
+    ) -> bytes:
+        return ReportRepository(
+            self.zonal_officer_repository.db
+        ).generate_zone_pdf(principal, period)

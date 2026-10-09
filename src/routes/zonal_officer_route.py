@@ -2,6 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 
 from src.core.security import (
     AuthenticatedPrincipal,
@@ -9,7 +10,11 @@ from src.core.security import (
     require_roles,
 )
 from src.schemas.pagination_schema import PaginatedDataSchema
-from src.schemas.report_schema import ReportRequestSchema, ReportResponseSchema
+from src.schemas.report_schema import (
+    ReportPeriodParam,
+    ReportRequestSchema,
+    ReportResponseSchema,
+)
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.schemas.student_schema import (
     MonthlyRecordResponseSchema,
@@ -214,35 +219,14 @@ async def get_monthly_report(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The zonal officer is not assigned to a zone.",
         )
+    start_date, end_date = request.resolve_period()
     result = _service.get_monthly_report(
-        request.start_date, request.end_date, principal
+        start_date, end_date, principal
     )
 
     return StandardResponseSchema(
         data=ReportResponseSchema.model_validate(result),
         message="Monthly zonal report retrieved successfully",
-        status_code=status.HTTP_200_OK,
-    )
-
-
-@router.post(
-    "/reports/three-month",
-    response_model=StandardResponseSchema[ReportResponseSchema],
-    status_code=status.HTTP_200_OK,
-)
-async def get_three_month_report(
-    request: ReportRequestSchema,
-    _service: Annotated[ZonalOfficerService, Depends()],
-    principal: Annotated[
-        AuthenticatedPrincipal, Depends(get_current_principal)
-    ],
-):
-    result = _service.get_three_month_report(
-        request.start_date, request.end_date, principal
-    )
-    return StandardResponseSchema(
-        data=ReportResponseSchema.model_validate(result),
-        message="Three-month zonal report retrieved successfully",
         status_code=status.HTTP_200_OK,
     )
 
@@ -295,6 +279,31 @@ async def list_saved_reports(
         data=result,
         message="Saved zonal reports retrieved successfully",
         status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get("/reports/pdf", status_code=status.HTTP_200_OK)
+async def get_zone_report_pdf(
+    _service: Annotated[ZonalOfficerService, Depends()],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    period: ReportPeriodParam,
+):
+    """Generate a PDF with the whole zonal performance and teacher performance
+    in the zone for the selected period (defaults to current month/year)."""
+    if principal.zone_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The zonal officer is not assigned to a zone.",
+        )
+    pdf_bytes = _service.generate_zone_pdf(principal, period)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                "attachment; filename=zonal-performance-report.pdf"
+            )
+        },
     )
 
 

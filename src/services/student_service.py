@@ -1,8 +1,10 @@
 import uuid
+from datetime import date
 from typing import Annotated, Any
 
 from fastapi import Depends
 
+from src.repositories.report_repo import ReportRepository
 from src.repositories.student_repo import StudentRepository
 
 
@@ -55,3 +57,10 @@ class StudentService:
 
     def submit_monthly_record(self, request_data: dict[str, Any]):
         return self.student_repository.create_monthly_record(request_data)
+
+    def generate_student_pdf(
+        self, principal: Any, period: tuple[date, date]
+    ) -> bytes:
+        return ReportRepository(
+            self.student_repository.db
+        ).generate_student_pdf(principal, period)

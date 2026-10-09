@@ -2,6 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 
 from src.core.security import (
     AuthenticatedPrincipal,
@@ -9,6 +10,7 @@ from src.core.security import (
     require_roles,
 )
 from src.schemas.pagination_schema import PaginatedDataSchema
+from src.schemas.report_schema import ReportPeriodParam
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.schemas.student_schema import (
     MonthlyRecordResponseSchema,
@@ -351,4 +353,24 @@ async def reset_monthly_record(
         data=None,
         message="Student monthly record reset successfully",
         status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get("/reports/pdf", status_code=status.HTTP_200_OK)
+async def get_teacher_report_pdf(
+    _service: Annotated[TeacherService, Depends()],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    period: ReportPeriodParam,
+):
+    """Generate a PDF with the teacher's own performance and their assigned
+    students' performance for the selected period (defaults to current)."""
+    pdf_bytes = _service.generate_teacher_pdf(principal, period)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                "attachment; filename=teacher-performance-report.pdf"
+            )
+        },
     )

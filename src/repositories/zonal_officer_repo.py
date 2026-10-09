@@ -95,19 +95,6 @@ class ZonalOfficerRepository:
             start_date, end_date, report_type="monthly", principal=principal
         )
 
-    def get_three_month_report(
-        self,
-        start_date: date,
-        end_date: date,
-        principal: AuthenticatedPrincipal,
-    ):
-        return ReportRepository(self.db).generate_report(
-            start_date,
-            end_date,
-            report_type="three_month",
-            principal=principal,
-        )
-
     def list_teachers(self, zone_id: uuid.UUID, offset: int, limit: int):
         return paginate(
             self.db,

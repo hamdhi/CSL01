@@ -88,12 +88,11 @@ class MinistryService:
             start_date, end_date, principal
         )
 
-    def get_three_month_province_report(
+    def generate_ministry_pdf(
         self,
-        start_date: date,
-        end_date: date,
         principal: AuthenticatedPrincipal,
-    ):
-        return self.ministry_repository.get_three_month_province_report(
-            start_date, end_date, principal
-        )
+        period: tuple[date, date],
+    ) -> bytes:
+        return ReportRepository(
+            self.ministry_repository.db
+        ).generate_ministry_pdf(principal, period)

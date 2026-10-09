@@ -302,13 +302,3 @@ class MinistryRepository:
         return ReportRepository(self.db).generate_report(
             start_date, end_date, report_type="province", principal=principal
         )
-
-    def get_three_month_province_report(
-        self, start_date: date, end_date: date, principal
-    ):
-        return ReportRepository(self.db).generate_report(
-            start_date,
-            end_date,
-            report_type="three_month_province",
-            principal=principal,
-        )

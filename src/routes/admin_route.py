@@ -188,7 +188,6 @@ async def view_any_report(
         status_code=status.HTTP_200_OK,
     )
 
-
 @router.get(
     "/reports/{report_id}",
     response_model=StandardResponseSchema[ReportResponseSchema],

@@ -1,9 +1,11 @@
 import base64
 import hashlib
 import hmac
+import logging
 import secrets
-from typing import Annotated
+from typing import Annotated, Literal, TypedDict
 from urllib.parse import urlencode, urlsplit
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -30,7 +32,23 @@ OAUTH_STATE_COOKIE = "google_oauth_state"
 OAUTH_VERIFIER_COOKIE = "google_oauth_verifier"
 OAUTH_NONCE_COOKIE = "google_oauth_nonce"
 OAUTH_RETRY_COOKIE = "google_oauth_retry"
-OAUTH_COOKIE_PATH = "/auth/google/callback"
+# Scope the short-lived OAuth cookies to the whole site so they survive the
+# Google round-trip regardless of proxy/path quirks (they are httponly and
+# expire within minutes). Keeping a single constant means both set and delete
+# paths stay in sync.
+OAUTH_COOKIE_PATH = "/"
+OAUTH_STATE_MAX_AGE = 900
+
+
+class OAuthCookieOptions(TypedDict):
+    httponly: bool
+    secure: bool
+    samesite: Literal["lax"]
+    max_age: int
+    path: str
+
+
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -135,9 +153,31 @@ def google_callback(
         or code_verifier is None
         or nonce is None
     ):
+        logger.warning(
+            "Google OAuth state check failed: host=%s, state_present=%s, "
+            "expected_state_present=%s, states_match=%s, "
+            "code_verifier_present=%s, nonce_present=%s. "
+            "If expected_state_present is False the state cookie was not "
+            "returned to the callback (often a host mismatch such as starting "
+            "at 127.0.0.1 while GOOGLE_REDIRECT_URI uses localhost, or the "
+            "cookie expired).",
+            request.url.hostname,
+            state is not None,
+            expected_state is not None,
+            expected_state is not None
+            and state is not None
+            and hmac.compare_digest(state, expected_state),
+            code_verifier is not None,
+            nonce is not None,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google sign-in state is invalid or expired. Please retry.",
+            detail=(
+                "Google sign-in state is invalid or expired. Please retry, "
+                "opening the sign-in URL directly in your browser and using "
+                "the same host (localhost) all the way through. If this keeps "
+                "happening, check the server log for the state check details."
+            ),
         )
     try:
         result = _service.login_with_google_code(code, code_verifier, nonce)
@@ -294,12 +334,12 @@ def _origin(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def _oauth_cookie_options() -> dict[str, object]:
+def _oauth_cookie_options() -> OAuthCookieOptions:
     return {
         "httponly": True,
         "secure": settings.AUTH_COOKIE_SECURE,
         "samesite": "lax",
-        "max_age": 600,
+        "max_age": OAUTH_STATE_MAX_AGE,
         "path": OAUTH_COOKIE_PATH,
     }
 
@@ -314,7 +354,7 @@ def _set_auth_cookies(response: Response, result: dict[str, object]) -> None:
     response.set_cookie(
         ACCESS_COOKIE,
         str(result["access_token"]),
-        max_age=int(result["expires_in"]),
+        max_age=int(str(result["expires_in"])),
         **common,
     )
     response.set_cookie(
@@ -363,8 +403,8 @@ def _clear_oauth_retry_cookie(response: Response) -> None:
 
 def _session_response(result: dict[str, object]) -> AuthSessionResponseSchema:
     return AuthSessionResponseSchema(
-        expires_in=int(result["expires_in"]),
-        account_id=result["account_id"],
-        actor_id=result["actor_id"],
+        expires_in=int(str(result["expires_in"])),
+        account_id=UUID(str(result["account_id"])),
+        actor_id=UUID(str(result["actor_id"])),
         role=str(result["role"]),
     )

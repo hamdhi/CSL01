@@ -17,6 +17,7 @@ from src.models.province import Province
 from src.models.report_snapshot import ReportSnapshot
 from src.models.student import Student
 from src.repositories._helpers import as_uuid
+from src.services import pdf_report
 
 
 class ReportRepository:
@@ -298,4 +299,54 @@ class ReportRepository:
             and principal.zone_id is not None
             and snapshot.scope_type == "zone"
             and snapshot.scope_id == principal.zone_id
+        )
+
+    # -------- PDF performance reports (new) --------
+
+    def generate_ministry_pdf(
+        self, principal: AuthenticatedPrincipal, period: tuple[date, date]
+    ) -> bytes:
+        start, end = period
+        return pdf_report.build_ministry_report(self.db, start, end)
+
+    def generate_zone_pdf(
+        self, principal: AuthenticatedPrincipal, period: tuple[date, date]
+    ) -> bytes:
+        from src.models.educational_zone import EducationalZone
+
+        if principal.zone_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="The zonal officer is not assigned to a zone.",
+            )
+        start, end = period
+        zone = self.db.get(EducationalZone, principal.zone_id)
+        zone_name = zone.name if zone else None
+        return pdf_report.build_zone_report(
+            self.db, principal.zone_id, zone_name, start, end
+        )
+
+    def generate_teacher_pdf(
+        self, principal: AuthenticatedPrincipal, period: tuple[date, date]
+    ) -> bytes:
+        from src.models.teacher import Teacher
+
+        start, end = period
+        teacher = self.db.get(Teacher, principal.actor_id)
+        teacher_name = teacher.Name if teacher else None
+        return pdf_report.build_teacher_report(
+            self.db,
+            principal.actor_id,
+            teacher_name,
+            principal.zone_id,
+            start,
+            end,
+        )
+
+    def generate_student_pdf(
+        self, principal: AuthenticatedPrincipal, period: tuple[date, date]
+    ) -> bytes:
+        start, end = period
+        return pdf_report.build_student_report(
+            self.db, principal.actor_id, start, end
         )

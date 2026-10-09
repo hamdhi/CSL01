@@ -1,8 +1,10 @@
 import uuid
+from datetime import date
 from typing import Annotated, Any
 
 from fastapi import Depends
 
+from src.repositories.report_repo import ReportRepository
 from src.repositories.student_repo import StudentRepository
 from src.repositories.teacher_repo import TeacherRepository
 
@@ -87,3 +89,10 @@ class TeacherService:
 
     def reset_monthly_record(self, student_id: str, zone_id: uuid.UUID):
         return self.teacher_repository.reset_monthly_record(student_id, zone_id)
+
+    def generate_teacher_pdf(
+        self, principal: Any, period: tuple[date, date]
+    ) -> bytes:
+        return ReportRepository(
+            self.teacher_repository.db
+        ).generate_teacher_pdf(principal, period)

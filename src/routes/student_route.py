@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 
 from src.core.security import (
     AuthenticatedPrincipal,
@@ -8,6 +9,7 @@ from src.core.security import (
     require_roles,
 )
 from src.schemas.pagination_schema import PaginatedDataSchema
+from src.schemas.report_schema import ReportPeriodParam
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.schemas.student_schema import (
     MonthlyRecordRequestSchema,
@@ -233,4 +235,28 @@ async def list_subjects(
         data=result,
         message="Subjects retrieved successfully",
         status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get(
+    "/reports/pdf",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_roles("STUDENT"))],
+)
+async def get_student_report_pdf(
+    _service: Annotated[StudentService, Depends()],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    period: ReportPeriodParam,
+):
+    """Generate a PDF with the student's own subject and marks performance for
+    the selected month/month-range (defaults to current)."""
+    pdf_bytes = _service.generate_student_pdf(principal, period)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                "attachment; filename=my-performance-report.pdf"
+            )
+        },
     )

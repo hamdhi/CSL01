@@ -2,6 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 
 from src.core.security import (
     AuthenticatedPrincipal,
@@ -10,7 +11,11 @@ from src.core.security import (
 )
 from src.schemas.ministry_schema import MinistryResponseSchema
 from src.schemas.pagination_schema import PaginatedDataSchema
-from src.schemas.report_schema import ReportRequestSchema, ReportResponseSchema
+from src.schemas.report_schema import (
+    ReportPeriodParam,
+    ReportRequestSchema,
+    ReportResponseSchema,
+)
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.schemas.student_schema import StudentRegistrationDecisionSchema
 from src.schemas.subject_schema import (
@@ -330,35 +335,14 @@ async def get_monthly_province_report(
         AuthenticatedPrincipal, Depends(get_current_principal)
     ],
 ):
+    start_date, end_date = request.resolve_period()
     result = _service.get_monthly_province_report(
-        request.start_date, request.end_date, principal
+        start_date, end_date, principal
     )
 
     return StandardResponseSchema(
         data=ReportResponseSchema.model_validate(result),
         message="Monthly province report retrieved successfully",
-        status_code=status.HTTP_200_OK,
-    )
-
-
-@router.post(
-    "/reports/three-month",
-    response_model=StandardResponseSchema[ReportResponseSchema],
-    status_code=status.HTTP_200_OK,
-)
-async def get_three_month_province_report(
-    request: ReportRequestSchema,
-    _service: Annotated[MinistryService, Depends()],
-    principal: Annotated[
-        AuthenticatedPrincipal, Depends(get_current_principal)
-    ],
-):
-    result = _service.get_three_month_province_report(
-        request.start_date, request.end_date, principal
-    )
-    return StandardResponseSchema(
-        data=ReportResponseSchema.model_validate(result),
-        message="Three-month province report retrieved successfully",
         status_code=status.HTTP_200_OK,
     )
 
@@ -378,6 +362,28 @@ async def list_saved_reports(
         data=result,
         message="Saved province reports retrieved successfully",
         status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get("/reports/pdf", status_code=status.HTTP_200_OK)
+async def get_ministry_report_pdf(
+    _service: Annotated[MinistryService, Depends()],
+    principal: Annotated[
+        AuthenticatedPrincipal, Depends(get_current_principal)
+    ],
+    period: ReportPeriodParam,
+):
+    """Generate a PDF report with Ministry, Province, Zone and School tables
+    plus charts for the selected month/month-range (defaults to current)."""
+    pdf_bytes = _service.generate_ministry_pdf(principal, period)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                "attachment; filename=ministry-performance-report.pdf"
+            )
+        },
     )
 
 

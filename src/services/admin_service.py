@@ -1,10 +1,12 @@
 import uuid
+from datetime import date
 from typing import Annotated, Any
 
 from fastapi import Depends
 
 from src.core.security import AuthenticatedPrincipal
 from src.repositories.admin_repo import AdminRepository
+from src.repositories.report_repo import ReportRepository
 
 
 class AdminService:
