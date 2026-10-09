@@ -1,4 +1,3 @@
-import uuid
 from typing import Annotated, Any
 
 from fastapi import Depends
@@ -7,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from src.core.database import get_session
 from src.models.monthly_record import MonthlyRecord
+from src.models.student import Student
 from src.models.teacher import Teacher
 from src.repositories._helpers import as_uuid, get_role_id
 
@@ -14,20 +14,6 @@ from src.repositories._helpers import as_uuid, get_role_id
 class TeacherRepository:
     def __init__(self, db: Annotated[Session, Depends(get_session)]) -> None:
         self.db = db
-
-    def create_teacher(self, request_data: dict[str, Any]):
-        request_data["tid"] = uuid.uuid4()
-        if request_data.get("role_id") is None:
-            request_data["role_id"] = get_role_id(self.db, "TEACHER")
-        teacher = Teacher(**request_data)
-        try:
-            self.db.add(teacher)
-            self.db.commit()
-            self.db.refresh(teacher)
-            return teacher
-        except Exception:
-            self.db.rollback()
-            raise
 
     def get_teacher(self, teacher_id: str):
         return self.db.scalar(
@@ -83,6 +69,23 @@ class TeacherRepository:
             self.db.commit()
             self.db.refresh(record)
             return record
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def decide_student_registration(self, student_id: str, approved: bool):
+        student = self.db.scalar(
+            select(Student).where(Student.stid == as_uuid(student_id))
+        )
+        if student is None:
+            return None
+        try:
+            student.registration_status = "approved" if approved else "rejected"
+            if approved:
+                student.role_id = get_role_id(self.db, "STUDENT")
+            self.db.commit()
+            self.db.refresh(student)
+            return student
         except Exception:
             self.db.rollback()
             raise

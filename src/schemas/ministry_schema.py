@@ -2,6 +2,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+
 class MinistryResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -14,4 +15,8 @@ class MinistryResponseSchema(BaseModel):
 class MinistryRequestSchema(BaseModel):
     name: str
     email: str
-    role_id: uuid.UUID | None = None
+
+
+class MinistryUpdateRequestSchema(BaseModel):
+    name: str | None = None
+    email: str | None = None

@@ -1,9 +1,14 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.schemas.ministry_schema import MinistryRequestSchema, MinistryResponseSchema
+from src.schemas.ministry_schema import (
+    MinistryRequestSchema,
+    MinistryResponseSchema,
+    MinistryUpdateRequestSchema,
+)
+from src.schemas.report_schema import ReportResponseSchema
 from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.services.admin_service import AdminService
 
@@ -19,7 +24,7 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
 )
 async def add_ministry_officer(
-    _request: MinistryRequestSchema,
+    _request: MinistryUpdateRequestSchema,
     _service: Annotated[AdminService, Depends()],
 ):
     result = await _service.addMinistry(_request.model_dump())
@@ -44,6 +49,11 @@ async def update_ministry_officer(
     result = _service.update_ministry_officer(
         str(officer_id), _request.model_dump(exclude_unset=True)
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ministry officer not found.",
+        )
 
     return StandardResponseSchema(
         data=MinistryResponseSchema.model_validate(result),
@@ -62,9 +72,29 @@ async def remove_ministry_officer(
     _service: Annotated[AdminService, Depends()],
 ):
     result = _service.remove_ministry_officer(str(officer_id))
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ministry officer not found.",
+        )
 
     return StandardResponseSchema(
         data=result,
         message="Ministry officer removed successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get(
+    "/reports",
+    response_model=StandardResponseSchema[list[ReportResponseSchema]],
+    status_code=status.HTTP_200_OK,
+)
+async def view_any_report(_service: Annotated[AdminService, Depends()]):
+    result = _service.view_any_report()
+
+    return StandardResponseSchema(
+        data=result,
+        message="Reports retrieved successfully",
         status_code=status.HTTP_200_OK,
     )

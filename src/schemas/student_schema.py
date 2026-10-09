@@ -9,7 +9,6 @@ class StudentRegisterRequestSchema(BaseModel):
     Grade: str
     School: str
     Gmail: EmailStr
-    registration_status: str = "pending"
     prov_id: uuid.UUID | None = None
     acc_number: str | None = None
 
@@ -22,6 +21,7 @@ class StudentResponseSchema(BaseModel):
     Grade: str
     School: str
     Gmail: EmailStr
+    registration_status: str
     prov_id: uuid.UUID | None = None
     acc_number: str | None = None
     role_id: uuid.UUID | None = None
@@ -29,11 +29,6 @@ class StudentResponseSchema(BaseModel):
 
 class GoogleLoginRequestSchema(BaseModel):
     id_token: str
-
-
-class MonthlyRecordCreateRequestSchema(BaseModel):
-    fk_stid: uuid.UUID
-    fk_tid: uuid.UUID | None = None
 
 
 class MonthlyRecordResponseSchema(BaseModel):

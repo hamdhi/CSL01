@@ -1,5 +1,7 @@
-from pydantic import BaseModel, ConfigDict, EmailStr
 import uuid
+
+from pydantic import BaseModel, ConfigDict, EmailStr
+
 
 class AdminRequestSchema(BaseModel):
     name: str

@@ -19,3 +19,6 @@ class AdminService:
 
     def remove_ministry_officer(self, officer_id: str):
         return self.admin_repository.delete_ministry_officer(officer_id)
+
+    def view_any_report(self):
+        return self.admin_repository.view_any_report()

@@ -19,11 +19,3 @@ class StudentService:
 
     def submit_monthly_record(self, request_data: dict[str, Any]):
         return self.student_repository.create_monthly_record(request_data)
-
-    def decide_student_registration(self, student_id: str, approved: bool):
-        return self.student_repository.decide_student_registration(
-            student_id, approved
-        )
-
-    def reset_student_login(self, student_id: str):
-        return self.student_repository.reset_student_login(student_id)

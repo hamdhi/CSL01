@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import Depends
 
@@ -11,11 +11,13 @@ class TeacherService:
     ) -> None:
         self.teacher_repository = teacher_repository
 
-    def add_teacher(self, request_data: dict[str, Any]):
-        return self.teacher_repository.create_teacher(request_data)
-
     def decide_monthly_record(self, record_id: str, approved: bool):
         return self.teacher_repository.decide_monthly_record(record_id, approved)
+
+    def decide_student_registration(self, student_id: str, approved: bool):
+        return self.teacher_repository.decide_student_registration(
+            student_id, approved
+        )
 
     def reset_student_login(self, student_id: str):
         return self.teacher_repository.reset_student_login(student_id)

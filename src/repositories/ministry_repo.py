@@ -1,15 +1,14 @@
-import calendar
 import uuid
-from collections import defaultdict
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.core.database import get_session
-from src.models.monthly_record import MonthlyRecord
+from src.models.educational_zone import EducationalZone
+from src.models.ministry_officer import MinistryOfficer
 from src.models.zonal_officer import ZonalOfficer
 from src.repositories._helpers import as_uuid, get_role_id
 from src.repositories.report_repo import ReportRepository
@@ -20,9 +19,22 @@ class MinistryRepository:
         self.db = db
 
     def addZonalOfficer(self, request_data: dict[str, Any]):
+        ministry_id = request_data.get("mini_id")
+        if ministry_id is not None and self.db.get(
+            MinistryOfficer, ministry_id
+        ) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ministry officer not found.",
+            )
+        zone_id = request_data.get("zone_id")
+        if zone_id is not None and self.db.get(EducationalZone, zone_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Educational zone not found.",
+            )
         request_data["zonal_id"] = uuid.uuid4()
-        if request_data.get("role_id") is None:
-            request_data["role_id"] = get_role_id(self.db, "ZONAL")
+        request_data["role_id"] = get_role_id(self.db, "ZONAL")
         officer = ZonalOfficer(**request_data)
         try:
             self.db.add(officer)
@@ -49,6 +61,20 @@ class MinistryRepository:
         officer = self.get_zonal_officer(officer_id)
         if officer is None:
             return None
+        ministry_id = changes.get("mini_id")
+        if ministry_id is not None and self.db.get(
+            MinistryOfficer, ministry_id
+        ) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ministry officer not found.",
+            )
+        zone_id = changes.get("zone_id")
+        if zone_id is not None and self.db.get(EducationalZone, zone_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Educational zone not found.",
+            )
         try:
             for field, value in changes.items():
                 setattr(officer, field, value)
@@ -71,43 +97,12 @@ class MinistryRepository:
             self.db.rollback()
             raise
 
-    # TODO: Implement report generation methods for MinistryRepository
+    def get_monthly_province_report(self, start_date: date, end_date: date):
+        return ReportRepository(self.db).get_monthly_records(
+            start_date, end_date, report_type="province"
+        )
 
-    # def get_monthly_province_report(self, start_date: str, end_date: str):
-    #     return ReportRepository(self.db).get_monthly_records(
-    #         start_date, end_date, report_type="province"
-    #     )
-
-    # def get_three_month_province_report(self, start_date: str, end_date: str):
-    #     return ReportRepository(self.db).get_monthly_records(
-    #         start_date, end_date, report_type="three_month_province"
-    #     )
-
-    def view_any_report(self):
-        records = self.db.scalars(
-            select(MonthlyRecord).order_by(MonthlyRecord.upload_date)
-        ).all()
-        reports: dict[tuple[int, int], list[dict[str, Any]]] = defaultdict(list)
-        for record in records:
-            uploaded = record.upload_date.date()
-            reports[(uploaded.year, uploaded.month)].append(
-                {
-                    "id": record.id,
-                    "fk_stid": record.fk_stid,
-                    "fk_tid": record.fk_tid,
-                    "upload_date": record.upload_date,
-                    "approved": record.approved,
-                }
-            )
-
-        return [
-            {
-                "report_type": "monthly",
-                "start_date": date(year, month, 1),
-                "end_date": date(
-                    year, month, calendar.monthrange(year, month)[1]
-                ),
-                "data": data,
-            }
-            for (year, month), data in sorted(reports.items())
-        ]
+    def get_three_month_province_report(self, start_date: date, end_date: date):
+        return ReportRepository(self.db).get_monthly_records(
+            start_date, end_date, report_type="three_month_province"
+        )

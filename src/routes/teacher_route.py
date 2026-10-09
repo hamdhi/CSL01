@@ -1,35 +1,45 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.schemas.standerd_response_schema import StandardResponseSchema
-from src.schemas.student_schema import MonthlyRecordResponseSchema
+from src.schemas.student_schema import (
+    MonthlyRecordResponseSchema,
+    StudentRegistrationDecisionSchema,
+    StudentResponseSchema,
+)
 from src.schemas.teacher_schema import (
     MonthlyRecordDecisionSchema,
-    TeacherCreateRequestSchema,
-    TeacherResponseSchema,
 )
 from src.services.teacher_service import TeacherService
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
 
 
-@router.post(
-    "",
-    response_model=StandardResponseSchema[TeacherResponseSchema],
-    status_code=status.HTTP_201_CREATED,
+@router.patch(
+    "/students/{student_id}/registration",
+    response_model=StandardResponseSchema[StudentResponseSchema],
+    status_code=status.HTTP_200_OK,
 )
-async def add_teacher(
-    request: TeacherCreateRequestSchema,
+async def decide_student_registration(
+    student_id: uuid.UUID,
+    request: StudentRegistrationDecisionSchema,
     _service: Annotated[TeacherService, Depends()],
 ):
-    result = _service.add_teacher(request.model_dump())
+    result = _service.decide_student_registration(
+        str(student_id), request.approved
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found.",
+        )
 
     return StandardResponseSchema(
-        data=TeacherResponseSchema.model_validate(result),
-        message="Teacher added successfully",
-        status_code=status.HTTP_201_CREATED,
+        data=StudentResponseSchema.model_validate(result),
+        message="Student registration decision saved successfully",
+        status_code=status.HTTP_200_OK,
     )
 
 
@@ -46,6 +56,11 @@ async def decide_monthly_record(
     result = _service.decide_monthly_record(
         str(record_id), request.approved
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Monthly record not found.",
+        )
 
     return StandardResponseSchema(
         data=MonthlyRecordResponseSchema.model_validate(result),
@@ -81,7 +96,12 @@ async def reset_monthly_record(
     student_id: uuid.UUID,
     _service: Annotated[TeacherService, Depends()],
 ):
-    _service.reset_monthly_record(str(student_id))
+    result = _service.reset_monthly_record(str(student_id))
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student monthly records not found.",
+        )
 
     return StandardResponseSchema(
         data=None,

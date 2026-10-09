@@ -18,39 +18,3 @@ class RoleRepository:
 
     def get_role(self, role_id: uuid.UUID) -> Role | None:
         return self.db.get(Role, role_id)
-
-    def create_role(self, name: str) -> Role:
-        role = Role(name=name)
-        try:
-            self.db.add(role)
-            self.db.commit()
-            self.db.refresh(role)
-            return role
-        except Exception:
-            self.db.rollback()
-            raise
-
-    def update_role(self, role_id: uuid.UUID, name: str) -> Role | None:
-        role = self.get_role(role_id)
-        if role is None:
-            return None
-        try:
-            role.name = name
-            self.db.commit()
-            self.db.refresh(role)
-            return role
-        except Exception:
-            self.db.rollback()
-            raise
-
-    def delete_role(self, role_id: uuid.UUID) -> bool:
-        role = self.get_role(role_id)
-        if role is None:
-            return False
-        try:
-            self.db.delete(role)
-            self.db.commit()
-            return True
-        except Exception:
-            self.db.rollback()
-            raise

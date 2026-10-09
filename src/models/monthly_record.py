@@ -27,7 +27,7 @@ class MonthlyRecord(Base):
         nullable=False,
         index=True,
     )
-    fk_tid: Mapped[uuid.UUID] = mapped_column(
+    fk_tid: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         index=True,
