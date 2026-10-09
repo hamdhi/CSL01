@@ -8,7 +8,7 @@ class MinistryResponseSchema(BaseModel):
 
     mini_id: uuid.UUID
     name: str
-    email: str
+    email: str | None
     approval_status: str
     admin_id: uuid.UUID | None
     role_id: uuid.UUID | None

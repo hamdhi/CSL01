@@ -1,14 +1,21 @@
+import base64
+import hashlib
+import hmac
+import secrets
 from typing import Annotated
+from urllib.parse import urlencode, urlsplit
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 
+from src.core.config import settings
 from src.core.security import (
     AuthenticatedPrincipal,
     get_current_principal,
 )
 from src.schemas.auth_schema import (
-    AuthTokenResponseSchema,
-    GoogleLoginRequestSchema,
+    AuthenticatedUserSchema,
+    AuthSessionResponseSchema,
     PasswordLoginRequestSchema,
     PasswordUpdateRequestSchema,
     RefreshTokenRequestSchema,
@@ -17,53 +24,146 @@ from src.schemas.standerd_response_schema import StandardResponseSchema
 from src.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+ACCESS_COOKIE = "access_token"
+REFRESH_COOKIE = "refresh_token"
+OAUTH_STATE_COOKIE = "google_oauth_state"
+OAUTH_VERIFIER_COOKIE = "google_oauth_verifier"
+OAUTH_NONCE_COOKIE = "google_oauth_nonce"
+OAUTH_COOKIE_PATH = "/auth/google/callback"
 
 
 @router.post(
     "/login",
-    response_model=StandardResponseSchema[AuthTokenResponseSchema],
+    response_model=StandardResponseSchema[AuthSessionResponseSchema],
 )
 async def login(
     request: PasswordLoginRequestSchema,
     _service: Annotated[AuthService, Depends()],
+    response: Response,
 ):
     result = _service.login_with_password(
         str(request.email), request.password
     )
+    _set_auth_cookies(response, result)
     return StandardResponseSchema(
-        data=AuthTokenResponseSchema.model_validate(result),
+        data=_session_response(result),
         message="Login successful",
         status_code=status.HTTP_200_OK,
     )
 
 
-@router.post(
-    "/google",
-    response_model=StandardResponseSchema[AuthTokenResponseSchema],
+@router.get(
+    "/google/start",
+    summary="Start Google sign-in",
+    description=(
+        "Open the [Google sign-in page]("
+        f"{settings.GOOGLE_REDIRECT_URI.removesuffix('/auth/google/callback')}"
+        "/auth/google/start) directly in your browser. Do not use **Try it out**: "
+        "this endpoint redirects to Google, and Swagger's API request cannot "
+        "follow that cross-site redirect because the response is not available "
+        "to browser JavaScript. Use the same host consistently for Swagger and "
+        "sign-in (for local development, use `localhost`, not `127.0.0.1`)."
+    ),
 )
-async def login_with_google(
-    request: GoogleLoginRequestSchema,
-    _service: Annotated[AuthService, Depends()],
-):
-    result = _service.login_with_google(request.id_token)
-    return StandardResponseSchema(
-        data=AuthTokenResponseSchema.model_validate(result),
-        message="Google login successful",
-        status_code=status.HTTP_200_OK,
+def start_google_login():
+    _validate_google_configuration()
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode("ascii")).digest()
+    ).rstrip(b"=").decode("ascii")
+    query = urlencode(
+        {
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": state,
+            "nonce": nonce,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
     )
+    response = RedirectResponse(
+        f"https://accounts.google.com/o/oauth2/v2/auth?{query}",
+        status_code=status.HTTP_302_FOUND,
+    )
+    cookie_options = _oauth_cookie_options()
+    response.set_cookie(
+        OAUTH_STATE_COOKIE, state, **cookie_options
+    )
+    response.set_cookie(
+        OAUTH_VERIFIER_COOKIE, code_verifier, **cookie_options
+    )
+    response.set_cookie(
+        OAUTH_NONCE_COOKIE, nonce, **cookie_options
+    )
+    return response
+
+
+@router.get("/google/callback", include_in_schema=True)
+def google_callback(
+    request: Request,
+    _service: Annotated[AuthService, Depends()],
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+):
+    _validate_google_configuration()
+    if error is not None or code is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google sign-in was cancelled or denied.",
+        )
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    code_verifier = request.cookies.get(OAUTH_VERIFIER_COOKIE)
+    nonce = request.cookies.get(OAUTH_NONCE_COOKIE)
+    if (
+        state is None
+        or expected_state is None
+        or not hmac.compare_digest(state, expected_state)
+        or code_verifier is None
+        or nonce is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google sign-in state is invalid or expired. Please retry.",
+        )
+    result = _service.login_with_google_code(code, code_verifier, nonce)
+    response = RedirectResponse(
+        settings.FRONTEND_URL,
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    _set_auth_cookies(response, result)
+    _clear_oauth_cookies(response)
+    return response
 
 
 @router.post(
     "/refresh",
-    response_model=StandardResponseSchema[AuthTokenResponseSchema],
+    response_model=StandardResponseSchema[AuthSessionResponseSchema],
 )
 async def refresh(
-    request: RefreshTokenRequestSchema,
+    request: Request,
+    response: Response,
     _service: Annotated[AuthService, Depends()],
+    token_request: RefreshTokenRequestSchema | None = None,
 ):
-    result = _service.refresh(request.refresh_token)
+    refresh_token = (
+        token_request.refresh_token
+        if token_request is not None
+        else request.cookies.get(REFRESH_COOKIE)
+    )
+    if refresh_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token is required.",
+        )
+    result = _service.refresh(refresh_token)
+    _set_auth_cookies(response, result)
     return StandardResponseSchema(
-        data=AuthTokenResponseSchema.model_validate(result),
+        data=_session_response(result),
         message="Tokens refreshed successfully",
         status_code=status.HTTP_200_OK,
     )
@@ -75,12 +175,35 @@ async def logout(
         AuthenticatedPrincipal, Depends(get_current_principal)
     ],
     _service: Annotated[AuthService, Depends()],
+    response: Response,
 ):
     if principal.session_id is not None:
         _service.logout(principal.session_id)
+    _clear_auth_cookies(response)
     return StandardResponseSchema(
         data=None,
         message="Logged out successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get(
+    "/me",
+    response_model=StandardResponseSchema[AuthenticatedUserSchema],
+)
+async def current_user(
+    principal: Annotated[
+        AuthenticatedPrincipal, Depends(get_current_principal)
+    ],
+):
+    return StandardResponseSchema(
+        data=AuthenticatedUserSchema(
+            account_id=principal.account_id,
+            actor_id=principal.actor_id,
+            actor_type=principal.actor_type,
+            role=principal.role,
+        ),
+        message="Authenticated user",
         status_code=status.HTTP_200_OK,
     )
 
@@ -98,4 +221,95 @@ async def update_password(
         data=None,
         message="Password updated successfully",
         status_code=status.HTTP_200_OK,
+    )
+
+
+def _validate_google_configuration() -> None:
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google OAuth client credentials are not configured.",
+        )
+    if (
+        _origin(settings.FRONTEND_URL) not in settings.allowed_origins
+        or _origin(settings.GOOGLE_REDIRECT_URI)
+        not in settings.allowed_origins
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "FRONTEND_URL and the Google callback origin must be listed "
+                "in ALLOWED_ORIGINS."
+            ),
+        )
+
+
+def _origin(url: str) -> str:
+    parsed = urlsplit(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _oauth_cookie_options() -> dict[str, object]:
+    return {
+        "httponly": True,
+        "secure": settings.AUTH_COOKIE_SECURE,
+        "samesite": "lax",
+        "max_age": 600,
+        "path": OAUTH_COOKIE_PATH,
+    }
+
+
+def _set_auth_cookies(response: Response, result: dict[str, object]) -> None:
+    common = {
+        "httponly": True,
+        "secure": settings.AUTH_COOKIE_SECURE,
+        "samesite": "lax",
+        "path": "/",
+    }
+    response.set_cookie(
+        ACCESS_COOKIE,
+        str(result["access_token"]),
+        max_age=int(result["expires_in"]),
+        **common,
+    )
+    response.set_cookie(
+        REFRESH_COOKIE,
+        str(result["refresh_token"]),
+        max_age=settings.REFRESH_TOKEN_DAYS * 24 * 60 * 60,
+        **common,
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    for name in (ACCESS_COOKIE, REFRESH_COOKIE):
+        response.delete_cookie(
+            name,
+            path="/",
+            secure=settings.AUTH_COOKIE_SECURE,
+            httponly=True,
+            samesite="lax",
+        )
+
+
+def _clear_oauth_cookies(response: Response) -> None:
+    for name in (
+        OAUTH_STATE_COOKIE,
+        OAUTH_VERIFIER_COOKIE,
+        OAUTH_NONCE_COOKIE,
+    ):
+        response.delete_cookie(
+            name,
+            path=OAUTH_COOKIE_PATH,
+            secure=settings.AUTH_COOKIE_SECURE,
+            httponly=True,
+            samesite="lax",
+        )
+
+
+def _session_response(result: dict[str, object]) -> AuthSessionResponseSchema:
+    return AuthSessionResponseSchema(
+        expires_in=int(result["expires_in"]),
+        account_id=result["account_id"],
+        actor_id=result["actor_id"],
+        role=str(result["role"]),
     )

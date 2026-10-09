@@ -1,12 +1,17 @@
 import hashlib
 import hmac
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request as UrlRequest
+from urllib.request import urlopen
 
 from fastapi import HTTPException, status
 from google.auth.exceptions import GoogleAuthError
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -42,22 +47,70 @@ class AuthRepository:
         principal = resolve_principal(self.db, account)
         return self._create_session(account, principal)
 
-    def login_with_google(self, token: str) -> dict[str, Any]:
+    def login_with_google_code(
+        self, code: str, code_verifier: str, nonce: str
+    ) -> dict[str, Any]:
         client_id = settings.GOOGLE_CLIENT_ID
-        if not client_id:
+        client_secret = settings.GOOGLE_CLIENT_SECRET
+        if not client_id or not client_secret:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="GOOGLE_CLIENT_ID is not configured.",
+                detail="Google OAuth client credentials are not configured.",
+            )
+        token_request = UrlRequest(
+            "https://oauth2.googleapis.com/token",
+            data=urlencode(
+                {
+                    "code": code,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                    "code_verifier": code_verifier,
+                }
+            ).encode("ascii"),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        try:
+            with urlopen(token_request, timeout=10) as response:
+                token_response = json.loads(response.read())
+        except (
+            HTTPError,
+            URLError,
+            TimeoutError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Google sign-in token exchange failed.",
+            ) from error
+        if not isinstance(token_response, dict):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Google returned an invalid sign-in response.",
+            )
+        google_id_token = token_response.get("id_token")
+        if not isinstance(google_id_token, str):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Google did not return a valid ID token.",
             )
         try:
             claims = id_token.verify_oauth2_token(
-                token, Request(), audience=client_id
+                google_id_token, GoogleRequest(), audience=client_id
             )
         except (ValueError, GoogleAuthError) as error:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Google ID token is invalid or expired.",
             ) from error
+        if not hmac.compare_digest(str(claims.get("nonce", "")), nonce):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Google sign-in verification failed.",
+            )
         email = claims.get("email")
         if (
             not isinstance(email, str)

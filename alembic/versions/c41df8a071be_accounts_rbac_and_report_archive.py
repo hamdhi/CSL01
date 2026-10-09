@@ -53,6 +53,13 @@ def upgrade() -> None:
     )
     op.add_column(
         "ministry_officers",
+        sa.Column("email", sa.String(length=100), nullable=True),
+    )
+    op.create_unique_constraint(
+        "uq_ministry_officers_email", "ministry_officers", ["email"]
+    )
+    op.add_column(
+        "ministry_officers",
         sa.Column(
             "approval_status",
             sa.String(length=20),
@@ -83,15 +90,29 @@ def upgrade() -> None:
         """
         INSERT INTO user_accounts
             (account_id, email, actor_type, actor_id, password_hash, created_at)
-        SELECT gen_random_uuid(), lower(trim(email)), actor_type, actor_id,
-               NULL, now()
+        SELECT gen_random_uuid(),
+               lower(trim(profiles.profile_email)),
+               profiles.actor_type,
+               profiles.actor_id,
+               NULL,
+               now()
         FROM (
-            SELECT admin_email AS email, 'admin' AS actor_type,
-                   admin_id AS actor_id FROM admins
+            SELECT admins.admin_email AS profile_email,
+                   'admin' AS actor_type,
+                   admins.admin_id AS actor_id
+            FROM admins
             UNION ALL
-            SELECT email, 'ministry', mini_id FROM ministry_officers
+            SELECT ministry_officers.email AS profile_email,
+                   'ministry' AS actor_type,
+                   ministry_officers.mini_id AS actor_id
+            FROM ministry_officers
+            WHERE ministry_officers.email IS NOT NULL
+              AND trim(ministry_officers.email) <> ''
             UNION ALL
-            SELECT Gmail, 'student', stid FROM students
+            SELECT students."Gmail" AS profile_email,
+                   'student' AS actor_type,
+                   students.stid AS actor_id
+            FROM students
         ) AS profiles
         """
     )
@@ -168,6 +189,10 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_user_accounts_email"), table_name="user_accounts")
     op.drop_table("user_accounts")
     op.drop_column("ministry_officers", "approval_status")
+    op.drop_constraint(
+        "uq_ministry_officers_email", "ministry_officers", type_="unique"
+    )
+    op.drop_column("ministry_officers", "email")
     op.drop_column("zonal_officers", "approval_status")
     op.drop_constraint(
         "fk_teachers_subject_id_subjects", "teachers", type_="foreignkey"

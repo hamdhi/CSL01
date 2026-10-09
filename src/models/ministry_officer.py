@@ -25,7 +25,9 @@ class MinistryOfficer(Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, unique=True
+    )
     approval_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending"
     )

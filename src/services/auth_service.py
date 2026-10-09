@@ -15,8 +15,12 @@ class AuthService:
     def login_with_password(self, email: str, password: str) -> dict[str, Any]:
         return self.auth_repository.login_with_password(email, password)
 
-    def login_with_google(self, token: str) -> dict[str, Any]:
-        return self.auth_repository.login_with_google(token)
+    def login_with_google_code(
+        self, code: str, code_verifier: str, nonce: str
+    ) -> dict[str, Any]:
+        return self.auth_repository.login_with_google_code(
+            code, code_verifier, nonce
+        )
 
     def refresh(self, refresh_token: str) -> dict[str, Any]:
         return self.auth_repository.refresh(refresh_token)

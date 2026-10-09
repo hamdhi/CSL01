@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -163,18 +163,24 @@ def resolve_principal(
 
 
 def get_current_principal(
+    request: Request,
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
     ],
     db: Annotated[Session, Depends(get_session)],
 ) -> AuthenticatedPrincipal:
-    if credentials is None:
+    access_token = (
+        credentials.credentials
+        if credentials is not None
+        else request.cookies.get("access_token")
+    )
+    if access_token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication is required.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    claims = decode_token(credentials.credentials, "access")
+    claims = decode_token(access_token, "access")
     try:
         account_id = uuid.UUID(str(claims["sub"]))
         session_id = uuid.UUID(str(claims["sid"]))
