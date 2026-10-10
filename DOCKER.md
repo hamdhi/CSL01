@@ -26,7 +26,7 @@ and any Google OAuth credentials you use. The example database URL connects to
 the PostgreSQL container through its published port.
 
 ```powershell
-Copy-Item .env.docker.example .env.docker
+Copy-Item .env.docker.example .env.docker or Use the given .env.docker
 docker build -t csl-api .
 docker run --rm --name csl-api --add-host=host.docker.internal:host-gateway --env-file .env.docker -p 8000:8000 csl-api
 ```
