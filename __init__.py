@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,6 +13,24 @@ from src.routes.student_route import router as student_router
 from src.routes.teacher_route import router as teacher_router
 from src.routes.zonal_officer_route import router as zonal_officer_router
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Seed the database on startup (dev only).
+
+    The seed lives in ``seed.py`` at the project root and is intentionally kept
+    out of the Alembic migrations. To disable seeding in production, simply
+    delete ``seed.py`` -- this import fails cleanly and seeding is skipped.
+    """
+    try:
+        from seed import run_seed
+
+        run_seed()
+    except ImportError:
+        pass
+    yield
+
+
 app = FastAPI(
     title="API",
     description="Admin API for the Student Management System",
@@ -18,6 +38,7 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
